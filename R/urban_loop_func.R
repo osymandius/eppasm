@@ -9,17 +9,12 @@ install.packages("testthat")
 devtools::load_all()
 
 files <- c("~/Documents/Data/Spectrum files/2018 final/SSA/Ghana_2018_final_v5_65.PJNZ", "~/Documents/Data/Spectrum files/2018 final/SSA/Botswana_ 2018 updated ART.PJNZ")
-# prop_75 <- vector("list", length(files))
+prop_75 <- list()
+names(prop_75) <- files
 
-prop_75 <- rep(list(rep(list(vector("list", 100)), length(files))), 2)
-names(prop_75) <- c("Incidence", "Mortality")
-
-for (j in 1:length(files)) {
-
+  
   ## Preparing EPP-ASM inputs
-  # pjnz <- "~/Documents/Data/Spectrum files/2018 final/SSA/Rwanda _2018_final.PJNZ"
-  # pjnz <- system.file("extdata/testpjnz", "Botswana2018.PJNZ", package="eppasm")
-  pjnz <- files[j]
+  pjnz <- "~/Documents/Data/Spectrum files/2018 final/SSA/Botswana_ 2018 updated ART.PJNZ"
   bw <- prepare_spec_fit(pjnz, proj.end=2021.5)
   
   fp <- prepare_directincid(pjnz)
@@ -41,17 +36,28 @@ for (j in 1:length(files)) {
   
   ########## Simulate HHS #############
   
-  sim_2020 <- data.frame(rbinom(100, 3000, prev(mod_new)[51])/3000) # 51st item in prev(mod_new) is the 2020 prevalence generated from 2020 incidence at 25% of 2010 incidence.
+  sim_2020 <- data.frame(rbinom(100, 3000, prev(mod_new)[51])/3000) # 51st item in prev(mod_new) is the 2020 prevalence with 2020 incidence at 25% of 2010 incidence.
   sim_hhs <- vector("list", 100)
   
-  # prop_75 <- data.frame("prop_above_75" = 0)
+  count <- 1
+  restore <- attr(bw$Urban, "eppd")$hhs
   
-  for (i in 1:3) {
-    
+  sim_hhs <- vector("list", 100)
+  
+  for (i in 1:100) {
     sim_hhs[[i]] <- attr(bw$Urban, "eppd")$hhs %>%
-        rbind(data.frame("year" = 2020, "sex" = "both", "agegr"="15-49", "n" = 3000,"prev" = sim_2020[i,], "se"=0.01,"deff"= 2, "deff_approx"= 2, "used"=TRUE))
+      rbind(data.frame("year" = 2020, "sex" = "both", "agegr"="15-49", "n" = 3000,"prev" = sim_2020[i,], "se"=0.01,"deff"= 2, "deff_approx"= 2, "used"=TRUE))
+  }
+  
+  mapply(model_run)
+  
+  model_run <- function(bw, fp) {
     
-    attr(bw$Urban, "eppd")$hhs <- sim_hhs[[i]]
+    attr(bw$Urban, "eppd")$hhs <- simm_hhs
+    
+    print(attr(bw$Urban, "eppd")$hhs)
+    
+  }
     
     theta_ur <- c(-0.63758, -2.76655, -1.26204, 1996.65945, 0.00778, 0.05195,
                   0.05103, 0.032, 0.01765, 0.01154, -0.00028, 0.01627, -0.00051,
@@ -97,35 +103,33 @@ for (j in 1:length(files)) {
     
     ## Fitting the EPP-ASM model
     bwfit <- list()
-      
+    
     bwfit$Urban <- fitmod(bw$Urban, eppmod = "rhybrid", rw_start = 2005,
-                            B0=1e4, B=1e2, opt_iter = 1, number_k=50)
+                          B0=1e3, B=1e2, opt_iter = 1, number_k=50)
     # bwfit$Rural <- fitmod(bw$Rural, eppmod = "rhybrid", rw_start = 2005,
     #                        B0=1e3, B=1e2, opt_iter = 1, number_k=50)
-      
-      #' When fitting, the random-walk based models only simulate through the end of the
-      #  data period. The `extend_projection()` function extends the random walk for $r(t)$
-      #  through the end of the projection period.
-      
+    
+    #' When fitting, the random-walk based models only simulate through the end of the
+    #  data period. The `extend_projection()` function extends the random walk for $r(t)$
+    #  through the end of the projection period.
+    
     bwfit <- lapply(bwfit, extend_projection, proj_years = 52)
-      
-      
-      ## Simulating model outptus
-      
+    
+    
+    ## Simulating model outptus
+    
     bwout <- Map(tidy_output, bwfit, "r-hybrid", attr(bw$Urban, "eppd")$country, names(bwfit))
-      
+    
     bwaggr <- aggr_specfit(bwfit)
     
-    reduction <- data.frame("incidence_red" = 1-sapply(1:3000, function(x) {
+    inc_red <- data.frame("incidence_red" = 1-sapply(1:3000, function(x) {
       attr(bwaggr[[x]], "incid15to49")[51]/attr(bwaggr[[x]], "incid15to49")[41]
-    }), "mort_red" = 1-sapply(1:3000, function(x) {
-      attr(bwaggr[[x]], "hivdeaths")[51]/attr(bwaggr[[x]], "hivdeaths")[41]
     })) 
     
-    prop_75[[1]][[j]][i] <- sum(reduction$incidence_red >= 0.75)/3000
-    prop_75[[2]][[j]][i] <- sum(reduction$mort_red >= 0.75)/3000
+    prop_75 <- data.frame("prop_above_75" = sum(inc_red$incidence_red >= 0.75)/3000)
+    
+    return(prop_75)
   }
+    
   
-  names(prop_75)[j] <- attr(bw$Urban, "eppd")$country
 
-}
