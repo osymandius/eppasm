@@ -17,7 +17,7 @@ names(prop_75) <- c("Incidence", "Mortality")
 for (j in 1:length(files)) {
 
   ## Preparing EPP-ASM inputs
-  # pjnz <- "~/Documents/Data/Spectrum files/2018 final/SSA/Rwanda _2018_final.PJNZ"
+  pjnz <- "~/Documents/Data/Spectrum files/2018 final/SSA/Rwanda _2018_final.PJNZ"
   # pjnz <- system.file("extdata/testpjnz", "Botswana2018.PJNZ", package="eppasm")
   pjnz <- files[j]
   bw <- prepare_spec_fit(pjnz, proj.end=2021.5)
@@ -49,7 +49,7 @@ for (j in 1:length(files)) {
   for (i in 1:3) {
     
     sim_hhs[[i]] <- attr(bw$Urban, "eppd")$hhs %>%
-        rbind(data.frame("year" = 2020, "sex" = "both", "agegr"="15-49", "n" = 3000,"prev" = sim_2020[i,], "se"=0.01,"deff"= 2, "deff_approx"= 2, "used"=TRUE))
+        rbind(data.frame("year" = 2020, "sex" = "both", "agegr"="15-49", "n" = 3000,"prev" = sim_2020[i,], "se"=sqrt((sim_2020[i,]*(1-sim_2020[i,]))/3000),"deff"= 2, "deff_approx"= 2, "used"=TRUE))
     
     attr(bw$Urban, "eppd")$hhs <- sim_hhs[[i]]
     
@@ -126,6 +126,7 @@ for (j in 1:length(files)) {
     prop_75[[2]][[j]][i] <- sum(reduction$mort_red >= 0.75)/3000
   }
   
-  names(prop_75)[j] <- attr(bw$Urban, "eppd")$country
+  names(prop_75)[[1]] <- attr(bw$Urban, "eppd")$country
 
 }
+
