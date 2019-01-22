@@ -55,6 +55,7 @@ for (j in 1:length(files)) {
     # sim_2020 <- data.frame(rbinom(100, 3000, prev(mod_new)[51])/3000) # 51st item in prev(mod_new) is the 2020 prevalence generated from 2020 incidence at 25% of 2010 incidence.
     sim_survey <- data.frame(matrix(ncol=length(survey_years)))
     colnames(sim_survey) <- survey_years
+    
     sim_survey[1:100,1] <- data.frame(rbinom(100, 3000, prev(mod_new)[as.numeric(survey_years[1])-1969])/3000) 
     sim_survey[1:100,2] <- data.frame(rbinom(100, 3000, prev(mod_new)[as.numeric(survey_years[2])-1969])/3000) 
     sim_survey[1:100,3] <- data.frame(rbinom(100, 3000, prev(mod_new)[as.numeric(survey_years[3])-1969])/3000) 
@@ -172,7 +173,20 @@ for (j in 1:length(files)) {
 
 test <- Map(tidy_edit, bwfit, "r-hybrid", attr(bw$Urban, "eppd")$country, names(bwfit))
 
-head(test2)
+test2 <- test$Urban %>%
+  filter(year == 2020 | year == 2022 | year == 2024 | year == 2026 | year == 2028) %>%
+  select(site, year,   mean,     n_sim,  type, age, agspan) %>%
+  rename(prev = mean, n = n_sim)
+
+test3 <- attr(bw$Urban, "eppd")$ancsitedat %>%
+  full_join(test2, by = c("site", "year", "prev", "n", "type", "age", "agspan")) %>%
+  mutate(agegr = "15-49") %>%
+  mutate(used = TRUE)
+
+t2 <- test3 %>%
+  ggplot(aes(x=year, y=prev)) +
+    geom_line(aes(color=site))
+
   ggplot(data=attr(bw$Urban, "eppd")$hhs, aes(x=year, y=prev)) +
     geom_point() +
     geom_line(data=bwout$Urban$core %>% filter(indicator=="prev"), aes(x=year, y=mean))
