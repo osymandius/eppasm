@@ -8,13 +8,13 @@ library(eppasm)
 install.packages("testthat")
 devtools::load_all()
 
-files <- c("~/Documents/2018-12 2020 targets/Uganda  2030.pjnz")
+files <- c("~/Documents/Data/Spectrum files/2018 final/SSA/Botswana_ 2018 updated ART.PJNZ")
 # prop_75 <- vector("list", length(files))
 
 inc_75 <- rep(list(vector("list", 100)), length(files))
 mort_75 <- rep(list(vector("list", 100)), length(files))
 
-survey_years <- c("2020", "2022")
+survey_years <- c("2020")
 inc_readout <- vector("list", length(survey_years))
 names(inc_readout)[1:length(survey_years)] <- survey_years
 
@@ -26,7 +26,7 @@ for (j in 1:length(files)) {
   # pjnz <- "~/Documents/2018-12 2020 targets/Botswana_ 2030.PJNZ"
   # pjnz <- system.file("extdata/testpjnz", "Botswana2018.PJNZ", package="eppasm")
   pjnz <- files[1]
-  bw <- prepare_spec_fit(pjnz, proj.end=2029.5)
+  bw <- prepare_spec_fit(pjnz, proj.end=2021.5)
   clean_hhs <- attr(bw$Urban, "eppd")$hhs
   
   fp <- prepare_directincid(pjnz)
@@ -44,6 +44,7 @@ for (j in 1:length(files)) {
   fp_new[["incidinput"]][52:length(fp_new[["incidinput"]])] <- fp_new[["incidinput"]][51]
   
   plot(fp_new[["incidinput"]])
+  plot(fp[["incidinput"]])
   
   mod_new <- simmod(fp_new)
   
@@ -79,6 +80,7 @@ for (j in 1:length(files)) {
                     -0.03548, 3.65223, -0.02515, -4.74563, 0.26259, -6.90124, 0.01583)
 
       fp <- attr(bw$Urban, "specfp")
+      
       fp <- prepare_rhybrid(fp, rw_start = 2005, rw_dk = 1)
 
       ## Set some flags that are set in fitmod(), (later improve this code...)
@@ -127,7 +129,8 @@ for (j in 1:length(files)) {
         #  data period. The `extend_projection()` function extends the random walk for $r(t)$
         #  through the end of the projection period.
 
-      bwfit <- lapply(bwfit, extend_projection, proj_years = 60)
+      bwfit <- lapply(bwfit, extend_projection, proj_years = 52)
+      # for 2030, extend to 60.
 
 
         ## Simulating model outptus
@@ -171,31 +174,90 @@ for (j in 1:length(files)) {
 
 } # end of j loop
 
-test <- Map(tidy_edit, bwfit, "r-hybrid", attr(bw$Urban, "eppd")$country, names(bwfit))
-
-test2 <- test$Urban %>%
-  filter(year == 2020 | year == 2022 | year == 2024 | year == 2026 | year == 2028) %>%
-  select(site, year,   mean,     n_sim,  type, age, agspan) %>%
-  rename(prev = mean, n = n_sim)
-
-test3 <- attr(bw$Urban, "eppd")$ancsitedat %>%
-  full_join(test2, by = c("site", "year", "prev", "n", "type", "age", "agspan")) %>%
-  mutate(agegr = "15-49") %>%
-  mutate(used = TRUE)
-
-t2 <- test3 %>%
-  ggplot(aes(x=year, y=prev)) +
-    geom_line(aes(color=site))
-
-  ggplot(data=attr(bw$Urban, "eppd")$hhs, aes(x=year, y=prev)) +
-    geom_point() +
-    geom_line(data=bwout$Urban$core %>% filter(indicator=="prev"), aes(x=year, y=mean))
-  
-  ggplot()+
-    geom_line(data=bwout$Urban$core %>% filter(indicator=="incid" & year>=2010), aes(x=year, y=mean))
+# test <- Map(tidy_edit, bwfit, "r-hybrid", attr(bw$Urban, "eppd")$country, names(bwfit))
+# 
+# test2 <- test$Urban %>%
+#   filter(year == 2020 | year == 2022 | year == 2024 | year == 2026 | year == 2028) %>%
+#   select(site, year,   mean,     n_sim,  type, age, agspan) %>%
+#   rename(prev = mean, n = n_sim)
+# 
+# test3 <- attr(bw$Urban, "eppd")$ancsitedat %>%
+#   full_join(test2, by = c("site", "year", "prev", "n", "type", "age", "agspan")) %>%
+#   mutate(agegr = "15-49") %>%
+#   mutate(used = TRUE)
+# 
+# t2 <- test3 %>%
+#   ggplot(aes(x=year, y=prev)) +
+#     geom_line(aes(color=site))
+# 
+#   ggplot(data=attr(bw$Urban, "eppd")$hhs, aes(x=year, y=prev)) +
+#     geom_point() +
+#     geom_line(data=bwout$Urban$core %>% filter(indicator=="prev"), aes(x=year, y=mean))
+#   
+#   ggplot()+
+#     geom_line(data=bwout$Urban$core %>% filter(indicator=="incid" & year>=2010), aes(x=year, y=mean))
 
   # data=data.frame("prev"=attr(bwaggr[[350]], "prev15to49"), "year" = 1970:2029)
 
+  
+tidy_test <- function(bw, ancsite=TRUE) {
+  
+  idvars <- data.frame(country = "country",
+                       eppregion = "eppregion",
+                       modlab = "modlab")
+  
+  ss <- fp$ss
+
+  param_list <- list(fnCreateParam(theta_ur, fp))
+  fp_list <- lapply(param_list, function(par) update(fp, list=par))
+  mod_list <- lapply(fp_list, simmod)
+  
+  b_site <- Map(sample_b_site, mod_list, fp_list, list(likdat$ancsite.dat), resid = FALSE)
+  
+  b_site_sigma <- sapply(b_site, anclik::sample.sigma2)
+  
+  b_site_df <- estci2(do.call(cbind, b_site))
+  b_site_df[,2] <- 0.01
+  ancsite_b <- data.frame(idvars, site = rownames(b_site_df), b_site_df)
+  
+  newdata <- expand.grid(site = unique(likdat$ancsite.dat$df$site),
+                         year = 1985:2020, #This is what is breaking it.
+                         type = "ancss",
+                         age = 15,
+                         agspan = 35,
+                         n = 300)
+  new_df <- ancsite_pred_df(newdata, fp)
+  
+  ancsite_pred <- mapply(sample_ancsite_pred, mod_list, fp_list,
+                         b_site = b_site,
+                         MoreArgs = list(newdata = new_df))
+  
+  ancsite_pred <- pnorm(ancsite_pred)
+
+
+  ancsite_pred <- data.frame(newdata, estci2(ancsite_pred))
+  #
+  ancsite_pred <- merge(ancsite_pred,
+                        likdat$ancsite.dat$df[c("site", "year", "type", "age", "agspan", "n", "prev", "pstar", "W", "v")],
+                        by = c("site", "year", "type", "age", "agspan"),
+                        suffixes = c("_sim", "_obs"), all.x=TRUE)
+  #
+  ancsite_pred <- data.frame(idvars, ancsite_pred)
+  
+  return(ancsite_pred)
+  
+} 
+
+test_agepregprev <- agepregprevtest(mod, fp, aidx = 3:9 * 5 - fp$ss$AGE_START + 1L, yidx = 1:fp$ss$PROJ_YEARS, agspan = 5, expand = FALSE)
+
+foo3 <- tidy_test(bw) %>%
+  ggplot(aes(x=year, y=mean)) +
+  geom_line(aes(color=site))
+
+grid.arrange(foo, foo1, foo2, foo3)
+
+test <- Map(tidy_edit, bwfit, "r-hybrid", attr(bw$Urban, "eppd")$country, names(bwfit))
+  
   tidy_edit <- function(fit, modlab, country=NA, eppregion=NA, ancsite = TRUE){
     
     idvars <- data.frame(country = country,
@@ -233,18 +295,18 @@ t2 <- test3 %>%
       ancsite_pred <- mapply(sample_ancsite_pred, mod_list, fp_list,
                              b_site = b_site,
                              MoreArgs = list(newdata = new_df))
-      
-      ancsite_pred <- pnorm(ancsite_pred)
-       
-       
-      ancsite_pred <- data.frame(newdata, estci2(ancsite_pred))
       # 
-      ancsite_pred <- merge(ancsite_pred,
-                            fit$likdat$ancsite.dat$df[c("site", "year", "type", "age", "agspan", "n", "prev", "pstar", "W", "v")],
-                            by = c("site", "year", "type", "age", "agspan"),
-                            suffixes = c("_sim", "_obs"), all.x=TRUE)
-      # 
-      ancsite_pred <- data.frame(idvars, ancsite_pred)
+      # ancsite_pred <- pnorm(ancsite_pred)
+      #  
+      #  
+      # ancsite_pred <- data.frame(newdata, estci2(ancsite_pred))
+      # # 
+      # ancsite_pred <- merge(ancsite_pred,
+      #                       fit$likdat$ancsite.dat$df[c("site", "year", "type", "age", "agspan", "n", "prev", "pstar", "W", "v")],
+      #                       by = c("site", "year", "type", "age", "agspan"),
+      #                       suffixes = c("_sim", "_obs"), all.x=TRUE)
+      # # 
+      # ancsite_pred <- data.frame(idvars, ancsite_pred)
     
     # out <- list(core = core,
     #             ageprevdat=ageprevdat,
@@ -256,5 +318,46 @@ t2 <- test3 %>%
     ## ageinfections = ageinfections,
     ## relincid = relincid)
       
-      return(ancsite_pred)
+      # return(ancsite_pred)
   }
+  
+agepregprevtest <- function (mod, fp, aidx = 3:9 * 5 - fp$ss$AGE_START + 1L, yidx = 1:fp$ss$PROJ_YEARS, 
+            agspan = 5, expand = FALSE) {
+    sidx <- fp$ss$f.idx
+    # if (length(agspan) == 1) 
+    #   agspan <- rep(agspan, length(aidx))
+    # if (expand) {
+    #   idx <- expand.grid(aidx = aidx, sidx = sidx, yidx = yidx)
+    #   idx$agspan <- rep(agspan, times = length(sidx) * length(yidx))
+    # }
+    # else idx <- data.frame("aidx" = aidx, "sidx" = sidx, "yidx" = yidx, 
+    #                        "agspan" = agspan)
+    
+    idx <- data.frame(aidx = rep(1, 18), sidx = rep(2, 18), yidx = c(22:34, 36:38, 40, 42), agspan = rep(35, 18))
+    idx$id <- seq_len(nrow(idx))
+    increment <- unlist(lapply(idx$agspan, seq_len)) - 1
+    a_idx <- rep(idx$aidx, idx$agspan) + increment
+    s_idx <- rep(idx$sidx, idx$agspan)
+    y_idx <- rep(idx$yidx, idx$agspan)
+    yminus1_idx <- rep(pmax(idx$yidx - 1, 1), idx$agspan)
+    id_idx <- rep(idx$id, idx$agspan)
+    fert_idx <- match(a_idx, fp$ss$p.fert.idx)
+    hfert_idx <- match(fp$ss$ag.idx[a_idx], fp$ss$h.fert.idx)
+    hivp <- (mod[cbind(a_idx, s_idx, 2, y_idx)] + mod[cbind(a_idx, 
+                                                            s_idx, 2, yminus1_idx)])/2
+    hivn <- (mod[cbind(a_idx, s_idx, 1, y_idx)] + mod[cbind(a_idx, 
+                                                            s_idx, 1, yminus1_idx)])/2
+    hivpop_fert <- attr(mod, "hivpop")[, fp$ss$h.fert.idx, fp$ss$f.idx, 
+                                       ]
+    artpop_fert <- attr(mod, "artpop")[, , fp$ss$h.fert.idx, 
+                                       fp$ss$f.idx, ]
+    ha_frr <- (colSums(hivpop_fert * fp$frr_cd4) + colSums(artpop_fert * 
+                                                             fp$frr_art, , 2))/(colSums(hivpop_fert) + colSums(artpop_fert, 
+                                                                                                               , 2))
+    births_a <- fp$asfr[cbind(fert_idx, y_idx)] * (hivn + hivp)
+    pregprev_a <- 1 - hivn/(hivn + ha_frr[cbind(hfert_idx, y_idx)] * 
+                              hivp)
+    fastmatch::ctapply(pregprev_a * births_a, id_idx, sum)/fastmatch::ctapply(births_a, 
+                                                                              id_idx, sum)
+  }
+  
