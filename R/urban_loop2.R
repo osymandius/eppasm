@@ -8,7 +8,7 @@ library(eppasm)
 install.packages("testthat")
 devtools::load_all()
 
-files <- c("~/Documents/Data/Spectrum files/2018 final/SSA/Botswana_ 2018 updated ART.PJNZ")
+files <- c("~/Documents/Data/Spectrum files/2018 final/SSA/Malawi_2018_version_8.PJNZ")
 # prop_75 <- vector("list", length(files))
 
 inc_75 <- rep(list(vector("list", 100)), length(files))
@@ -23,10 +23,10 @@ num_surv_iter <- 2
 for (j in 1:length(files)) {
 
   ## Preparing EPP-ASM inputs
-  # pjnz <- "~/Documents/2018-12 2020 targets/Botswana_ 2030.PJNZ"
+  pjnz <- "~/Documents/2018-12 2020 targets/Botswana_ 2030.PJNZ"
   # pjnz <- system.file("extdata/testpjnz", "Botswana2018.PJNZ", package="eppasm")
   pjnz <- files[1]
-  bw <- prepare_spec_fit(pjnz, proj.end=2021.5)
+  bw <- prepare_spec_fit(pjnz, proj.end=2029.5)
   clean_hhs <- attr(bw$Urban, "eppd")$hhs
   
   fp <- prepare_directincid(pjnz)
@@ -77,7 +77,7 @@ for (j in 1:length(files)) {
       theta_ur <- c(-0.63758, -2.76655, -1.26204, 1996.65945, 0.00778, 0.05195,
                     0.05103, 0.032, 0.01765, 0.01154, -0.00028, 0.01627, -0.00051,
                     0.01439, -0.00937, -0.01135, 0.03692, 0.14959, 0.00803, 0.02424,
-                    -0.03548, 3.65223, -0.02515, -4.74563, 0.26259, -6.90124, 0.01583)
+                    -0.03548, 3.65223, -0.02515, -4.74563, 0.26259, -6.90124, 0.01583, 0.01583, 0.01583, 0.01583, 0.01583)
 
       fp <- attr(bw$Urban, "specfp")
       
@@ -89,9 +89,10 @@ for (j in 1:length(files)) {
       fp$logitiota <- TRUE
       fp$rw_start <- 2005
       fp$incidmod <- "eppspectrum"
-
+      
       param <- fnCreateParam(theta_ur, fp)
       fp_par <- update(fp, list = param)
+    
 
       ## Simulate the model once.
 
@@ -253,6 +254,8 @@ test_agepregprev <- agepregprevtest(mod, fp, aidx = 3:9 * 5 - fp$ss$AGE_START + 
 foo3 <- tidy_test(bw) %>%
   ggplot(aes(x=year, y=mean)) +
   geom_line(aes(color=site))
+
+foo1
 
 grid.arrange(foo, foo1, foo2, foo3)
 
