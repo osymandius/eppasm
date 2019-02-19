@@ -81,9 +81,11 @@ merge_sim_anc <- function(bw, theta) {
   
   filtered_max_year <- map2(nest_sites$data, years, filter_years)
   
-  for (i in 1:length(filtered_max_year)) {
-    filtered_max_year[[i]]$site <- sites[i]
-  }
+  mapply(function(a, b){filtered_max_year[[a]]$site <<- b}, b=sites, a=1:10)
+  
+  # for (i in 1:length(filtered_max_year)) {
+  #   filtered_max_year[[i]]$site <- sites[i]
+  # }
   
   filtered_max_year <- data.frame(do.call(rbind, filtered_max_year)) %>%
     mutate(agegr = "15-49") %>%
