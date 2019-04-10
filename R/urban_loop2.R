@@ -3,7 +3,7 @@ setwd("~/Documents/GitHub/EPP")
 library(dplyr)
 library(magrittr)
 
-devtools::install_github("mrc-ide/eppasm@new-master")
+devtools::install_github("osymandius/eppasm@new-master")
 library(eppasm)
 install.packages("testthat")
 devtools::load_all()
@@ -199,57 +199,3 @@ for (j in 1:length(files)) {
 #     geom_line(data=bwout$Urban$core %>% filter(indicator=="incid" & year>=2010), aes(x=year, y=mean))
 
   # data=data.frame("prev"=attr(bwaggr[[350]], "prev15to49"), "year" = 1970:2029)
-
-  
-tidy_test <- function(bw, ancsite=TRUE) {
-  
-  idvars <- data.frame(country = "country",
-                       eppregion = "eppregion",
-                       modlab = "modlab")
-  
-  ss <- fp$ss
-
-  param_list <- list(fnCreateParam(theta_ur, fp))
-  fp_list <- lapply(param_list, function(par) update(fp, list=par))
-  mod_list <- lapply(fp_list, simmod)
-  
-  b_site <- Map(sample_b_site, mod_list, fp_list, list(likdat$ancsite.dat), resid = FALSE)
-  
-  b_site_sigma <- sapply(b_site, anclik::sample.sigma2)
-  
-  # b_site_df <- estci2(do.call(cbind, b_site))
-  # b_site_df[,2] <- 0.01
-  # ancsite_b <- data.frame(idvars, site = rownames(b_site_df), b_site_df)
-  ancsite_b <- data.frame(idvars, site = names(b_site[[1]]), mean = b_site[[1]])
-  
-  newdata <- expand.grid(site = unique(likdat$ancsite.dat$df$site),
-                         year = 1985:2020, #This is what is breaking it.
-                         type = "ancss",
-                         age = 15,
-                         agspan = 35,
-                         n = 300)
-  new_df <- ancsite_pred_df(newdata, fp)
-  
-  ancsite_pred <- mapply(sample_ancsite_pred, mod_list, fp_list,
-                         b_site = b_site,
-                         MoreArgs = list(newdata = new_df))
-  
-  ancsite_pred <- pnorm(ancsite_pred)
-
-
-  # ancsite_pred <- data.frame(newdata, estci2(ancsite_pred))
-  ancsite_pred <- data.frame(newdata, "prev" = ancsite_pred)
-  #
-  ancsite_pred <- merge(ancsite_pred,
-                        likdat$ancsite.dat$df[c("site", "year", "type", "age", "agspan", "n", "prev", "pstar", "W", "v")],
-                        by = c("site", "year", "type", "age", "agspan"),
-                        suffixes = c("_sim", "_obs"), all.x=TRUE)
-  #
-  ancsite_pred <- data.frame(idvars, ancsite_pred)
-  
-  return(ancsite_pred)
-  
-} 
-
-debug(tidy_test)
-var <- tidy_test(bw)

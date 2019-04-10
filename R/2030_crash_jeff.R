@@ -20,9 +20,6 @@ anc_project <- function(bw, theta, ancsite=TRUE) {
   
   b_site_sigma <- sapply(b_site, anclik::sample.sigma2)
   
-  # b_site_df <- estci2(do.call(cbind, b_site))
-  # b_site_df[,2] <- 0.01
-  # ancsite_b <- data.frame(idvars, site = rownames(b_site_df), b_site_df)
   ancsite_b <- data.frame(site = names(b_site[[1]]), mean = b_site[[1]])
   
   newdata <- expand.grid(site = unique(likdat$ancsite.dat$df$site),
@@ -54,9 +51,8 @@ anc_project <- function(bw, theta, ancsite=TRUE) {
   
 } 
 
-debugonce(tidy_test)
-tidy_test(bw, theta_ur)
-
+debugonce(sample_b_site)
+anc_project(obj, theta_u)
 
 merge_sim_anc <- function(bw, theta) {
   
@@ -92,7 +88,9 @@ merge_sim_anc <- function(bw, theta) {
     mutate(used = TRUE) %>%
     select(c("site", "year", "used",  "prev", "n", "type", "agegr", "age","agspan"))
   
-  merge_anc <- attr(bw$Urban, "eppd")$ancsitedat %>%
+  clean_anc <- attr(bw$Urban, "eppd")$ancsitedat
+  
+  merge_anc <- clean_anc %>%
     rbind(filtered_max_year)
     
 
@@ -108,32 +106,22 @@ var <- merge_sim_anc(bw, theta_ur)
 {
 files <- c("~/Documents/Data/Spectrum files/2018 final/SSA/Botswana_ 2018 updated ART.PJNZ", "~/Documents/2018-12 2020 targets/Botswana_ 2030.PJNZ")
 
-pjnz <- files[1]
+pjnz <- files[2]
 
-obj <- prepare_spec_fit(pjnz, 2021.5)
+obj <- prepare_spec_fit(pjnz, 2029.5)
 
+## Don't understand what Jeff has done here ##
 opt <- fitmod(obj$Urban, eppmod = "rhybrid", optfit = TRUE, B0=1e3, opthess = FALSE)
 opt$resample <- matrix(opt$par, nrow = 1)
 opt_full <- extend_projection(opt, opt$fp$ss$PROJ_YEARS)
 
-
 theta_u <- as.numeric(opt_full$resample[1,])
 fp <- opt_full$fp
 
-          # fp <- prepare_directincid(pjnz)
-          # 
-          # theta_ur <- c(-0.63758, -2.76655, -1.26204, 1996.65945, 0.00778, 0.05195,
-          #               0.05103, 0.032, 0.01765, 0.01154, -0.00028, 0.01627, -0.00051,
-          #               0.01439, -0.00937, -0.01135, 0.03692, 0.14959, 0.00803, 0.02424,
-          #               -0.03548, 3.65223, -0.02515, -4.74563, 0.26259, -6.90124, 0.01583)
-          # 
-          # fp <- attr(bw$Urban, "specfp")
-          # 
-          # fp <- prepare_rhybrid(fp, rw_start = 2005, rw_dk = 1)
-
 ## Set some flags that are set in fitmod(), (later improve this code...)
-fp$ancsitedata <- TRUE
-fp$ancrt <- "both"
+fp <- prepare_anc_model(fp, attr(bw$Urban, "eppd"))
+# fp$ancsitedata <- TRUE
+# fp$ancrt <- "both"
 fp$logitiota <- TRUE
 fp$rw_start <- 2005
 fp$incidmod <- "eppspectrum"
@@ -144,14 +132,8 @@ fp_par <- update(fp, list = param)
 mod <- simmod(fp_par)
 
 plot(prev(mod))
-        
-        # param <- fnCreateParam(theta_ur, fp)
-        # fp_par <- update(fp, list = param)
+prev(mod)
 
-
-        ## Simulate the model once.
-        
-        # mod <- simmod(fp_par)
 ## Prepare likelihood and calculate the likelihood once
 
 ## Prior
@@ -176,7 +158,7 @@ ll_ancrtcens(mod, likdat$ancrtcens.dat, fp_par)
 ## Fitting the EPP-ASM model
 bwfit <- list()
 
-bwfit$Urban <- fitmod(bw$Urban, eppmod = "rhybrid", rw_start = 2005,
+bwfit$Urban <- fitmod(obj$Urban, eppmod = "rhybrid", rw_start = 2005,
                       B0=1e4, B=1e2, opt_iter = 1, number_k=50)
 # bwfit$Rural <- fitmod(bw$Rural, eppmod = "rhybrid", rw_start = 2005,
 #                        B0=1e3, B=1e2, opt_iter = 1, number_k=50)
@@ -185,13 +167,13 @@ bwfit$Urban <- fitmod(bw$Urban, eppmod = "rhybrid", rw_start = 2005,
 #  data period. The `extend_projection()` function extends the random walk for $r(t)$
 #  through the end of the projection period.
 
-bwfit <- lapply(bwfit, extend_projection, proj_years = 61)
+bwfit <- lapply(bwfit, extend_projection, proj_years = 60)
 # for 2030, extend to 60.
 
 
 ## Simulating model outptus
-
-bwout <- Map(tidy_output, bwfit, "r-hybrid", attr(bw$Urban, "eppd")$country, names(bwfit))
+debugonce(tidy_output)
+bwout <- Map(tidy_output, bwfit, "r-hybrid", attr(obj$Urban, "eppd")$country, names(bwfit))
 
 bwaggr <- aggr_specfit(bwfit)
 }
@@ -213,8 +195,11 @@ fp <- attr(bw$Urban, "specfp")
 fp <- prepare_rhybrid(fp, rw_start = 2005, rw_dk = 1)
 
 ## Set some flags that are set in fitmod(), (later improve this code...)
-fp$ancsitedata <- TRUE
-fp$ancrt <- "both"
+# fp$ancsitedata <- TRUE
+# fp$ancrt <- "both"
+
+fp <- prepare_anc_model(fp, attr(bw$Urban, "eppd"))
+
 fp$logitiota <- TRUE
 fp$rw_start <- 2005
 fp$incidmod <- "eppspectrum"
@@ -236,7 +221,42 @@ lprior(theta_ur, fp)
 ## Prepare likelihood data
 likdat <- prepare_likdat(attr(bw$Urban, "eppd"), fp)
 
-anc_prev <- min_year(bw, theta_ur)
+## Calculate likelihood
+ll(theta_ur, fp, likdat)
+
+## Components of likelihood calculation
+ll_hhsage(mod, likdat$hhs.dat)
+
+ll_ancsite(mod, fp_par,
+           coef = c(fp_par$ancbias, fp_par$ancrtsite.beta),
+           vinfl = fp_par$v.infl,
+           dat = likdat$ancsite.dat)
+
+ll_ancrtcens(mod, likdat$ancrtcens.dat, fp_par)
+
+## Fitting the EPP-ASM model
+bwfit <- list()
+
+bwfit$Urban <- fitmod(bw$Urban, eppmod = "rhybrid", rw_start = 2005,
+                      B0=1e4, B=1e2, opt_iter = 1, number_k=50)
+# bwfit$Rural <- fitmod(bw$Rural, eppmod = "rhybrid", rw_start = 2005,
+#                        B0=1e3, B=1e2, opt_iter = 1, number_k=50)
+
+#' When fitting, the random-walk based models only simulate through the end of the
+#  data period. The `extend_projection()` function extends the random walk for $r(t)$
+#  through the end of the projection period.
+
+bwfit <- lapply(bwfit, extend_projection, proj_years = 52)
+# for 2030, extend to 60.
+
+
+## Simulating model outptus
+debugonce(tidy_output)
+bwout <- Map(tidy_output, bwfit, "r-hybrid", attr(obj$Urban, "eppd")$country, names(bwfit))
+
+bwaggr <- aggr_specfit(bwfit)
+
+# anc_prev <- min_year(bw, theta_ur)
 
 }
 
